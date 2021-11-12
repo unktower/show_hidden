@@ -65,8 +65,14 @@ end
 
 -- Adds trigger to table and makes it visible
 local function AddTrigger(ent, triggerType)
+	local col = ShowHidden.DEFAULT_TRIGGERS_COLORS[triggerType]
+
 	ent:RemoveEffects(EF_NODRAW)
+	ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
+	ent:SetMaterial(ShowHidden.TRIGGERS_MATERIAL_NAMES[col.material])
+	ent:SetColor(col.color)
 	ent:SetNWInt("showtriggers_type", triggerType)
+
 	table.insert(g_triggers[triggerType], ent)
 end
 

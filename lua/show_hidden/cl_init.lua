@@ -22,21 +22,8 @@ local ShowHidden, TriggerType = ShowHidden, ShowHidden.TriggerType
 local render, ipairs, IsValid = render, ipairs, IsValid
 
 local TRACE_TIMEOUT = 5
-local DEFAULT_TRIGGERS_COLORS = {
-	[TriggerType.PUSH] =        { color = Color(128, 255, 0, 255),  material = MaterialEnum.DEFAULT },
-	[TriggerType.BASEVEL] =     { color = Color(0, 255, 0, 255),    material = MaterialEnum.DEFAULT },
-	[TriggerType.GRAVITY] =     { color = Color(0, 255, 128, 255),  material = MaterialEnum.DEFAULT },
-	[TriggerType.TELEPORT] =    { color = Color(255, 0, 0, 255),    material = MaterialEnum.DEFAULT },
-	[TriggerType.TELE_FILTER] = { color = Color(255, 0, 128, 128),  material = MaterialEnum.DEFAULT },
-	[TriggerType.ANTIPRE] =     { color = Color(192, 0, 255, 64),   material = MaterialEnum.SOLID },
-	[TriggerType.PLATFORM] =    { color = Color(0, 128, 255, 128),  material = MaterialEnum.WIREFRAME },
-	[TriggerType.OTHER] =       { color = Color(255, 192, 0, 128),  material = MaterialEnum.WIREFRAME },
-}
-local TRIGGERS_MATERIAL_NAMES = {
-	[MaterialEnum.WIREFRAME] = "models/wireframe",
-	[MaterialEnum.DEFAULT] = "tools/toolstrigger",
-	[MaterialEnum.SOLID] = "!triggers_solid",
-}
+local DEFAULT_TRIGGERS_COLORS = ShowHidden.DEFAULT_TRIGGERS_COLORS
+local TRIGGERS_MATERIAL_NAMES = ShowHidden.TRIGGERS_MATERIAL_NAMES
 
 local TRIGGERS_SOLID_MATERIAL = CreateMaterial("triggers_solid", "LightmappedGeneric", {
 	["$basetexture"] = "color/white",
@@ -47,6 +34,7 @@ local cv_triggers = CreateClientConVar("showtriggers_enabled", "0", false, true,
 local cv_triggerTypes = CreateClientConVar("showtriggers_types", tostring(ShowHidden.ALL_TYPES),
 true, false, "Enabled trigger types bit-mask", 0, ShowHidden.ALL_TYPES)
 
+local g_triggerAppearTime = {}
 local g_triggersCount = {}
 local g_triggersColors = DEFAULT_TRIGGERS_COLORS
 
@@ -71,37 +59,73 @@ local function LoadTriggersColors()
 		g_triggersColors[t] = {
 			material = math.floor(math.Clamp(tonumber(col.material) or default.material, 0, 2)),
 			color = istable(col.color) and Color(
-			math.floor(math.Clamp(tonumber(col.color.r) or default.color.r, 0, 255)),
-			math.floor(math.Clamp(tonumber(col.color.g) or default.color.g, 0, 255)),
-			math.floor(math.Clamp(tonumber(col.color.b) or default.color.b, 0, 255)),
-			math.floor(math.Clamp(tonumber(col.color.a) or default.color.a, 0, 255))
-		) or table.Copy(default.color),
-	}
+				math.floor(math.Clamp(tonumber(col.color.r) or default.color.r, 0, 255)),
+				math.floor(math.Clamp(tonumber(col.color.g) or default.color.g, 0, 255)),
+				math.floor(math.Clamp(tonumber(col.color.b) or default.color.b, 0, 255)),
+				math.floor(math.Clamp(tonumber(col.color.a) or default.color.a, 0, 255))
+			) or table.Copy(default.color),
+		}
+	end
 end
-end
+
+-- HACK: https://gist.github.com/swampservers/15f48ea3c0898a369a61e9e84e347e8d
+local LocalPlayer, CurTime = LocalPlayer, CurTime
+hook.Add("Tick", "ShowTriggers.OverrideServer", function()
+    local cutoff = CurTime() - (0.5 + (IsValid(LocalPlayer()) and LocalPlayer():Ping() / 1000 or 1))
+
+    for ent, time in pairs(g_triggerAppearTime) do
+        if not IsValid(ent) or ent:IsDormant() or time < cutoff then
+			g_triggerAppearTime[ent] = nil
+        else
+			local triggerType = ent:GetNWInt("showtriggers_type", 0)
+			if triggerType ~= 0 then
+				local col = g_triggersColors[triggerType]
+
+				ent:RemoveEffects(EF_NODRAW)
+				ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
+				ent:SetMaterial(TRIGGERS_MATERIAL_NAMES[col.material])
+				ent:SetSubMaterial(nil, TRIGGERS_MATERIAL_NAMES[col.material])
+				ent:SetColor(col.color)
+			end
+		end
+    end
+end)
 
 local function SetTriggerColor(ent, triggerType)
 	local col = g_triggersColors[triggerType]
-	if col then
-		ent:RemoveEffects(EF_NODRAW)
-		ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
-		ent:SetMaterial(TRIGGERS_MATERIAL_NAMES[col.material])
-		ent:SetColor(col.color)
+	if not col then return end
 
-		--[[ local text = language.GetPhrase("showtriggers.type." .. triggerType)
-		debugoverlay.Cross(ent:GetPos(), 8, TRACE_TIMEOUT, col.color, true)
-		debugoverlay.EntityTextAtPosition(ent:GetPos(), 1, text, TRACE_TIMEOUT) ]]
+	local matName = TRIGGERS_MATERIAL_NAMES[col.material]
+	local entCol = ent:GetColor()
+
+	if matName ~= ent:GetMaterial() or col.color.r ~= entCol.r or col.color.g ~= entCol.g
+		or col.color.b ~= entCol.b or col.color.a ~= entCol.a then
+		g_triggerAppearTime[ent] = CurTime()
 	end
+
+	ent:RemoveEffects(EF_NODRAW)
+	ent:SetRenderMode(RENDERMODE_TRANSCOLOR)
+	ent:SetMaterial(matName)
+	ent:SetColor(col.color)
+
+	--[[ local text = language.GetPhrase("showtriggers.type." .. triggerType)
+	debugoverlay.Cross(ent:GetPos(), 8, TRACE_TIMEOUT, col.color, true)
+	debugoverlay.EntityTextAtPosition(ent:GetPos(), 1, text, TRACE_TIMEOUT) ]]
 end
 
 local function NetTriggerTypeProxy(ent, name, old, new)
 	if not IsValid(ent) or ent:IsDormant() or not cv_triggers:GetBool()
-	or not ShowHidden.CheckMask(cv_triggerTypes:GetInt(), new) then return end
+		or not ShowHidden.CheckMask(cv_triggerTypes:GetInt(), new) then return end
 	SetTriggerColor(ent, new)
 end
 
 local function HandleVisibleTrigger(ent, show)
-	if show == false or not IsValid(ent) or not ShowHidden.TRACK_TRIGGERS[ent:GetClass()] then return end
+	if not IsValid(ent) or not ShowHidden.TRACK_TRIGGERS[ent:GetClass()] then return end
+
+	if show == false then
+		g_triggerAppearTime[ent] = nil
+		return
+	end
 
 	local triggerType = ent:GetNWInt("showtriggers_type", 0)
 	if triggerType == 0 or not cv_triggers:GetBool() or not ShowHidden.CheckMask(cv_triggerTypes:GetInt(), triggerType) then
@@ -140,8 +164,9 @@ net.Receive("ShowHidden.ShowTriggers", function()
 	end
 
 	g_triggersCount[0] = total
-	UpdateVisibleTriggers()
 	ShowHidden.UpdateCountTooltips()
+
+	UpdateVisibleTriggers()
 
 	print("[ShowTriggers]\tEnabled triggers: " .. enabled .. " / " .. total)
 end)

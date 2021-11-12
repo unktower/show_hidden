@@ -1,4 +1,4 @@
-# ShowHidden (ShowCLips & ShowTriggers)
+# ShowHidden (ShowClips & ShowTriggers)
 
 Module for Garry's mod Bunnyhop gamemode that shows invisible obstacles.
 
