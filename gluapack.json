@@ -1,0 +1,28 @@
+{
+    "unique_id": null,
+    
+    "exclude": [
+        "**/lib/*.lua"
+    ],
+
+    "minimize": [
+        "**/*.lua",
+        "!**/lib/*.lua"
+    ],
+
+    "include_sh": [
+        "**/sh_*.lua"
+    ],
+    "include_cl": [
+        "**/cl_*.lua"
+    ],
+    "include_sv": [
+        "**/sv_*.lua"
+    ],
+    
+    "entry_cl": [],
+    "entry_sh": [
+        "autorun/*.lua"
+    ],
+    "entry_sv": []
+}

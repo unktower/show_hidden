@@ -69,6 +69,7 @@ local function LoadTriggersColors()
 end
 
 -- HACK: https://gist.github.com/swampservers/15f48ea3c0898a369a61e9e84e347e8d
+-- TODO: fade alpha on client and set wireframe material on server
 local LocalPlayer, CurTime = LocalPlayer, CurTime
 hook.Add("Tick", "ShowTriggers.OverrideServer", function()
     local cutoff = CurTime() - (0.5 + (IsValid(LocalPlayer()) and LocalPlayer():Ping() / 1000 or 1))

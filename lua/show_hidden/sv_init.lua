@@ -41,6 +41,7 @@ local function RecordOutputs(ent, key, value)
 
 	local delay = tonumber(args[4]) or 0
 	local k, v = unpack(string.Explode(" ", args[3], false))
+	-- TODO: record classnames too
 	if delay > 0 and delay < 0.1 and k == "targetname" then
 		g_platformTargetNames[v] = true
 	end
