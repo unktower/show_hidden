@@ -1,8 +1,9 @@
 {
-    "unique_id": null,
+    "unique_id": "show_hidden",
     
     "exclude": [
-        "**/lib/*.lua"
+        "**/lib/*.lua",
+        "show_hidden/cl_lang.lua"
     ],
 
     "minimize": [

@@ -1,7 +1,11 @@
 local PREFIX_CLIPS = "ShowClips"
 local PREFIX_TRIGGERS = "ShowTriggers"
-local COLOR_CLIPS = Color(255, 0, 123, 200)
-local COLOR_TRIGGERS = Color(255, 192, 0, 200)
+local PREFIX_PROPS = "ShowProps"
+local PREFIX_COLORS = {
+	[PREFIX_CLIPS] =    Color(255, 0, 123, 200),
+	[PREFIX_TRIGGERS] = Color(255, 192, 0, 200),
+	[PREFIX_PROPS] =    Color(0, 255, 128, 200),
+}
 
 local MaterialEnum = {
 	WIREFRAME = 0,
@@ -10,8 +14,15 @@ local MaterialEnum = {
 }
 
 local function ChatMessage(prefix, phrase)
-	local color = (prefix == PREFIX_CLIPS and COLOR_CLIPS or COLOR_TRIGGERS)
-	chat.AddText(color_white, "[", color, prefix, color_white, "] ", language.GetPhrase(phrase))
+	chat.AddText(color_white, "[", PREFIX_COLORS[prefix], prefix, color_white, "] ", language.GetPhrase(phrase))
+end
+
+local function PrintEnum(enum, prefix)
+	for i = 1, enum.MAX do
+		print(string.format("%3d. %s (%s)", i, language.GetPhrase(prefix .. i),
+			table.KeyFromValue(enum, i)))
+	end
+	print("MaterialTypes: 0 - wireframe, 1 - default, 2 - solid color")
 end
 
 -- TODO: refactor this file
@@ -38,46 +49,16 @@ local g_triggerAppearTime = {}
 local g_triggersCount = {}
 local g_triggersColors = DEFAULT_TRIGGERS_COLORS
 
-local function SaveTriggersColors()
-	file.Write("showtriggers_colors.json", util.TableToJSON(g_triggersColors, true))
-end
-
--- Read and sanitize triggers materials and colors from config file
-local function LoadTriggersColors()
-	local colors = util.JSONToTable(file.Read("showtriggers_colors.json", "DATA") or "") or {}
-	g_triggersColors = {}
-
-	for _, t in pairs(TriggerType) do
-		local default = DEFAULT_TRIGGERS_COLORS[t]
-		local col = colors[t]
-
-		if not istable(col) then
-			g_triggersColors[t] = table.Copy(default)
-			continue
-		end
-
-		g_triggersColors[t] = {
-			material = math.floor(math.Clamp(tonumber(col.material) or default.material, 0, 2)),
-			color = istable(col.color) and Color(
-				math.floor(math.Clamp(tonumber(col.color.r) or default.color.r, 0, 255)),
-				math.floor(math.Clamp(tonumber(col.color.g) or default.color.g, 0, 255)),
-				math.floor(math.Clamp(tonumber(col.color.b) or default.color.b, 0, 255)),
-				math.floor(math.Clamp(tonumber(col.color.a) or default.color.a, 0, 255))
-			) or table.Copy(default.color),
-		}
-	end
-end
-
 -- HACK: https://gist.github.com/swampservers/15f48ea3c0898a369a61e9e84e347e8d
 -- TODO: fade alpha on client and set wireframe material on server
 local LocalPlayer, CurTime = LocalPlayer, CurTime
 hook.Add("Tick", "ShowTriggers.OverrideServer", function()
-    local cutoff = CurTime() - (0.5 + (IsValid(LocalPlayer()) and LocalPlayer():Ping() / 1000 or 1))
+	local cutoff = CurTime() - (0.5 + (IsValid(LocalPlayer()) and LocalPlayer():Ping() / 1000 or 1))
 
-    for ent, time in pairs(g_triggerAppearTime) do
-        if not IsValid(ent) or ent:IsDormant() or time < cutoff then
+	for ent, time in pairs(g_triggerAppearTime) do
+		if not IsValid(ent) or ent:IsDormant() or time < cutoff then
 			g_triggerAppearTime[ent] = nil
-        else
+		else
 			local triggerType = ent:GetNWInt("showtriggers_type", 0)
 			if triggerType ~= 0 then
 				local col = g_triggersColors[triggerType]
@@ -89,7 +70,7 @@ hook.Add("Tick", "ShowTriggers.OverrideServer", function()
 				ent:SetColor(col.color)
 			end
 		end
-    end
+	end
 end)
 
 local function SetTriggerColor(ent, triggerType)
@@ -100,7 +81,7 @@ local function SetTriggerColor(ent, triggerType)
 	local entCol = ent:GetColor()
 
 	if matName ~= ent:GetMaterial() or col.color.r ~= entCol.r or col.color.g ~= entCol.g
-		or col.color.b ~= entCol.b or col.color.a ~= entCol.a then
+	or col.color.b ~= entCol.b or col.color.a ~= entCol.a then
 		g_triggerAppearTime[ent] = CurTime()
 	end
 
@@ -116,7 +97,7 @@ end
 
 local function NetTriggerTypeProxy(ent, name, old, new)
 	if not IsValid(ent) or ent:IsDormant() or not cv_triggers:GetBool()
-		or not ShowHidden.CheckMask(cv_triggerTypes:GetInt(), new) then return end
+	or not ShowHidden.CheckMask(cv_triggerTypes:GetInt(), new) then return end
 	SetTriggerColor(ent, new)
 end
 
@@ -168,8 +149,7 @@ net.Receive("ShowHidden.ShowTriggers", function()
 	ShowHidden.UpdateCountTooltips()
 
 	UpdateVisibleTriggers()
-
-	print("[ShowTriggers]\tEnabled triggers: " .. enabled .. " / " .. total)
+	-- print("[ShowTriggers]\tEnabled triggers: " .. enabled .. " / " .. total)
 end)
 
 local function ToggleTriggers(cv, old, new)
@@ -193,12 +173,13 @@ end
 local function UpdateTriggerTypeMaterial(ply, cmd, args)
 	if #args < 1 then
 		print("Usage: " .. cmd .. " TRIGGER_TYPE MATERIAL_TYPE \"R G B A\"")
+		PrintEnum(TriggerType, "showtriggers.type.")
 		return
 	end
 
 	local triggerType = math.floor(tonumber(args[1]) or 0)
 	if not table.KeyFromValue(TriggerType, triggerType) then
-		PrintTable(TriggerType)
+		PrintEnum(TriggerType, "showtriggers.type.")
 		return
 	end
 
@@ -208,7 +189,7 @@ local function UpdateTriggerTypeMaterial(ply, cmd, args)
 
 	g_triggersColors[triggerType] = { material = material, color = color }
 	UpdateVisibleTriggers()
-	SaveTriggersColors()
+	ShowHidden.SaveConfig()
 end
 concommand.Add("showtriggers_material", UpdateTriggerTypeMaterial, nil, "Sets material and color for trigger type")
 
@@ -246,93 +227,342 @@ end, nil, "Show triggers info. Use: developer 1")
 -- Convar callbacks
 cvars.AddChangeCallback(cv_triggers:GetName(), ToggleTriggers, "showtriggers_enabled")
 cvars.AddChangeCallback(cv_triggerTypes:GetName(), ToggleTriggers, "showtriggers_types")
-LoadTriggersColors()
 
 -- [[ ShowClips ]] --
 
-local luabsp = ShowHidden.luabsp
-
-local DEFAULT_CLIPS_COLOR = { material = 1, color = ColorAlpha(color_white, 128) }
-local CLIPS_MATERIALS = {
-	[MaterialEnum.WIREFRAME] = CreateMaterial("showclips_0", "Wireframe", {
-		["$vertexalpha"] = 1,
-	}),
-	[MaterialEnum.SOLID] = CreateMaterial("showclips_2", "UnlitGeneric", {
-		["$basetexture"] = "color/white",
-		["$vertexalpha"] = 1,
-	}),
-	[MaterialEnum.DEFAULT] = CreateMaterial("showclips_1", "UnlitGeneric", {
-		["$basetexture"] = "tools/toolsplayerclip",
-		["$vertexalpha"] = 1,
-	}),
+local BrushType = {
+	PLAYER_CLIP = 1, -- Player and monster clips
+	INVISIBLE = 2, -- Invisible but solid brushes
+	LADDER = 3, -- Invisible ladders
+	NO_DRAW = 4, -- NoDraw brushes
+	SKYBOX = 5, -- SkyBox and Sky2D brushes
+	MAX = 5,
 }
 
-local cv_enabled = CreateClientConVar("showclips", "0", false, true, "Show or hide player-clip brushes", 0, 1)
-local cv_material = CreateClientConVar("showclips_material", "1", true, false, "0 = wireframe, 1 = playerclip, 2 = solid color", 0, 2)
-local cv_color = CreateClientConVar("showclips_color", "255 255 255 255", true, false, "Clips brush draw color \"R G B A\"")
+local ALL_BRUSH_TYPES = math.pow(2, BrushType.MAX) - 1
 
-local g_clipBrushes = nil
-local g_clipsMaterial = CLIPS_MATERIALS[MaterialEnum.DEFAULT]
+local BRUSH_TEXTURE_NAME = {
+	[BrushType.PLAYER_CLIP] =   "tools/toolsplayerclip",
+	[BrushType.INVISIBLE] =     "tools/toolsinvisible",
+	[BrushType.LADDER] =        "tools/toolsinvisibleladder",
+	[BrushType.NO_DRAW] =       "tools/toolsnodraw",
+	[BrushType.SKYBOX] =        "tools/toolsskybox",
+}
 
-local function UpdateMaterial(cv, old, new)
-	if cv and new == old then return end
-	local col = string.ToColor(cv_color:GetString())
+local BRUSH_SEARCH_FLAGS = {
+	[BrushType.PLAYER_CLIP] = { -(CONTENTS_PLAYERCLIP), SURF_NOLIGHT + SURF_NODRAW },
+	[BrushType.INVISIBLE] = { CONTENTS_TRANSLUCENT + CONTENTS_GRATE, SURF_NOLIGHT + SURF_NODRAW + SURF_TRANS, "TOOLS/TOOLSINVISIBLE" },
+	[BrushType.LADDER] = { CONTENTS_LADDER + CONTENTS_TRANSLUCENT + CONTENTS_GRATE, SURF_NOLIGHT + SURF_NODRAW },
+	[BrushType.NO_DRAW] = { CONTENTS_SOLID, SURF_NOLIGHT + SURF_NODRAW, "TOOLS/TOOLSNODRAW" },
+	[BrushType.SKYBOX] = { CONTENTS_SOLID, -SURF_SKY, "TOOLS/TOOLSSKYBOX" },
+}
 
-	g_clipsMaterial = CLIPS_MATERIALS[cv_material:GetInt()] or CLIPS_MATERIALS[MaterialEnum.DEFAULT]
-	g_clipsMaterial:SetFloat("$alpha", col.a / 255)
-	g_clipsMaterial:SetVector("$color", col:ToVector())
+local DEFAULT_BRUSH_COLORS = {
+	[BrushType.PLAYER_CLIP] =   { color = Color(255, 255, 255, 192), material = MaterialEnum.DEFAULT },
+	[BrushType.INVISIBLE] =     { color = Color(255, 255, 255, 255), material = MaterialEnum.DEFAULT },
+	[BrushType.LADDER] =        { color = Color(255, 255, 255, 255), material = MaterialEnum.DEFAULT },
+	[BrushType.NO_DRAW] =       { color = Color(255, 255, 255, 128), material = MaterialEnum.DEFAULT },
+	[BrushType.SKYBOX] =        { color = Color(255, 255, 255, 255), material = MaterialEnum.DEFAULT },
+}
+
+local cv_enabled = CreateClientConVar("showclips", "0", false, true, "Show or hide player-clip brushes", 0, ALL_BRUSH_TYPES)
+
+local g_map = ShowHidden.luabsp.LoadMap(game.GetMap())
+local g_brushesColors, g_brushesMaterials = DEFAULT_BRUSH_COLORS, {}
+local g_brushesCount, g_brushMeshes, g_brushesDraw = {}, {}, {}
+
+local function CreateBrushMaterial(brushType, mat)
+	local name = "showclips_" .. brushType .. "_" .. mat
+
+	if mat == MaterialEnum.WIREFRAME then
+		return CreateMaterial(name, "Wireframe", {
+			["$vertexalpha"] = 1,
+			["$vertexcolor"] = 1,
+		})
+	end
+
+	return CreateMaterial(name, "UnlitGeneric", {
+		["$basetexture"] = mat == MaterialEnum.SOLID and "color/white" or BRUSH_TEXTURE_NAME[brushType],
+        ["$vertexalpha"] = 1,
+        ["$vertexcolor"] = 1,
+	})
 end
 
-local function LoadClipBrushes(cb)
-	if g_clipBrushes then return cb(true) end
-	ChatMessage(PREFIX_CLIPS, "showclips.msg.lags")
+local function UpdateBrushMaterial(brushType, mat, color)
+	local material = CreateBrushMaterial(brushType, mat)
+	material:SetFloat("$alpha", color.a / 255)
+	material:SetVector("$color", color:ToVector())
+	g_brushesMaterials[brushType] = material
+end
+
+local function LoadBrushes(brushTypes, cb)
+	if table.Count(g_brushMeshes) == 0 then
+		ChatMessage(PREFIX_CLIPS, "showclips.msg.lags")
+	end
 
 	timer.Simple(0.1, function()
 		-- Handle errors
 		local ok, err = pcall(function()
-			local bsp = luabsp.LoadMap(game.GetMap())
-			if bsp then
-				g_clipBrushes = bsp:GetClipBrushes(false)
+			for brushType = 1, BrushType.MAX do
+				if bit.band(brushTypes, bit.lshift(1, brushType - 1)) ~= 0 and not g_brushMeshes[brushType] then
+					local flags = BRUSH_SEARCH_FLAGS[brushType]
+					g_brushMeshes[brushType], g_brushesCount[brushType] =
+						g_map:GetBrushesMeshFiltered(flags[1], flags[2], flags[3], true)
+				end
 			end
-			print("[ShowClips]", "Found " .. #g_clipBrushes .. " playerclip brushes")
 		end)
-		if not ok then
-			ChatMessage(PREFIX_CLIPS, "showclips.msg.error")
-			print("[ShowClips]\tError:", err)
-		end
-		cb(ok)
+		if not ok then g_brushMeshes[brushType] = {} end
+		cb(ok, err)
 	end)
 end
 
 local function DrawClipBrushes()
 	render.OverrideDepthEnable(true, true)
-	render.SetMaterial(g_clipsMaterial)
-	for _, mesh in ipairs(g_clipBrushes) do
-		mesh:Draw()
+	for brushType, _ in pairs(g_brushesDraw) do
+		render.SetMaterial(g_brushesMaterials[brushType])
+		g_brushMeshes[brushType]:Draw()
 	end
 	render.OverrideDepthEnable(false)
 end
 
-local function ToggleClipBrushes()
-	if cv_enabled:GetBool() then
-		LoadClipBrushes(function(ok)
-			if not ok then return cv_enabled:SetBool(false) end
-			hook.Add("PostDrawOpaqueRenderables", "bhop_showclips", DrawClipBrushes)
-			ChatMessage(PREFIX_CLIPS, "showclips.msg.enabled")
-			UpdateMaterial()
-			ShowHidden.UpdateCountTooltips()
-		end)
-	else
+local function ToggleClipBrushes(cv, old, new)
+	local types = cv_enabled:GetInt()
+	if types > ALL_BRUSH_TYPES or types < 0 then types = 0 end
+
+	if types == 0 then
 		hook.Remove("PostDrawOpaqueRenderables", "bhop_showclips")
-		ChatMessage(PREFIX_CLIPS, "showclips.msg.disabled")
+		if old == "1" then
+			ChatMessage(PREFIX_CLIPS, "showclips.msg.disabled")
+		end
+	else
+		LoadBrushes(types, function(ok, err)
+			if not ok then
+				ChatMessage(PREFIX_CLIPS, "showclips.msg.error")
+				print("[ShowClips]\tError:", err)
+				cv_enabled:SetInt(0)
+				return
+			end
+
+			for brushType = 1, BrushType.MAX do
+				if bit.band(types, bit.lshift(1, brushType - 1)) ~= 0 then
+					local mat = g_brushesColors[brushType]
+					UpdateBrushMaterial(brushType, mat.material, mat.color)
+					g_brushesDraw[brushType] = true
+
+					--[[ print("[ShowClips]", string.format("Enabled %d brushes of type %s (%d)",
+						g_brushesCount[brushType], table.KeyFromValue(BrushType, brushType), brushType)) ]]
+				else
+					g_brushesDraw[brushType] = nil
+				end
+			end
+
+			hook.Add("PostDrawOpaqueRenderables", "bhop_showclips", DrawClipBrushes)
+			ShowHidden.UpdateCountTooltips()
+
+			if types == BrushType.PLAYER_CLIP then
+				ChatMessage(PREFIX_CLIPS, "showclips.msg.enabled")
+			end
+		end)
 	end
 end
 
+local function UpdateBrushTypeMaterial(ply, cmd, args)
+	if #args < 1 then
+		print("Usage: " .. cmd .. " BRUSH_TYPE MATERIAL_TYPE \"R G B A\"")
+		PrintEnum(BrushType, "showclips.type.")
+		return
+	end
+
+	local brushType = math.floor(tonumber(args[1]) or 0)
+	if not BRUSH_SEARCH_FLAGS[brushType] then
+		PrintEnum(BrushType, "showclips.type.")
+		return
+	end
+
+	local default = DEFAULT_BRUSH_COLORS[brushType]
+	local material = math.floor(math.Clamp(tonumber(args[2]) or default.material, 0, 2))
+	local color = args[3] and string.ToColor(args[3]) or table.Copy(default.color)
+
+	g_brushesColors[brushType] = { material = material, color = color }
+	UpdateBrushMaterial(brushType, material, color)
+	ShowHidden.SaveConfig()
+end
+concommand.Add("showclips_material", UpdateBrushTypeMaterial, nil, "Sets material and color for brush type")
+
 -- Convar callbacks
 cvars.AddChangeCallback(cv_enabled:GetName(), ToggleClipBrushes, "showclips")
-cvars.AddChangeCallback(cv_material:GetName(), UpdateMaterial, "showclips_material")
-cvars.AddChangeCallback(cv_color:GetName(), UpdateMaterial, "showclips_color")
-UpdateMaterial()
+
+-- [[ ShowProps ]] --
+
+local DEFAULT_PROPS_COLOR = { color = Color(127, 255, 255, 192), material = MaterialEnum.WIREFRAME }
+
+local g_propsColor = DEFAULT_PROPS_COLOR
+local g_propsMaterial, g_staticProps
+
+local cv_props = CreateClientConVar("showprops", "0", false, true, "Toggle static props collision meshes", 0, 1)
+
+local function UpdatePropsMaterial(mat, color)
+	if mat == MaterialEnum.SOLID then
+		g_propsMaterial = CreateMaterial("showprops_" .. mat, "UnlitGeneric", {
+			["$basetexture"] = "color/white",
+			["$vertexalpha"] = 1,
+			["$vertexcolor"] = 1,
+		})
+	else
+		g_propsMaterial = CreateMaterial("showprops_" .. mat, "Wireframe", {
+			["$vertexalpha"] = 1,
+			["$vertexcolor"] = 1,
+			["$ignorez"] = mat == MaterialEnum.DEFAULT and 1 or 0
+		})
+	end
+	g_propsMaterial:SetFloat("$alpha", color.a / 255)
+	g_propsMaterial:SetVector("$color", color:ToVector())
+end
+
+local function GetModelCollisionMesh(model)
+	-- TODO: add support for SOLID_BBOX
+    local ent = ents.CreateClientProp(model)
+    ent:Spawn()
+    local phys = ent:GetPhysicsObject()
+    if not IsValid(phys) then return nil end
+    local m = Mesh()
+    m:BuildFromTriangles(phys:GetMesh())
+    ent:Remove()
+    return m
+end
+
+local function LoadStaticProps(cb)
+	if not g_staticProps then
+		ChatMessage(PREFIX_PROPS, "showclips.msg.lags")
+	end
+
+	timer.Simple(0.1, function()
+		-- Handle errors
+		local ok, err = pcall(function()
+			if not g_map.static_props then
+				g_map:LoadStaticProps()
+			end
+
+			local modelToMesh = {}
+			g_staticProps = {}
+
+			for _, lump in ipairs(g_map.static_props) do
+				for i, prop in ipairs(lump.entries) do
+					if prop.Solid ~= SOLID_VPHYSICS then goto cont end
+					local obj = modelToMesh[prop.PropType] or GetModelCollisionMesh(prop.PropType)
+					if not obj then goto cont end
+
+					local matrix = Matrix()
+					if prop.Origin then matrix:Translate(prop.Origin) end
+					if prop.Angles then matrix:Rotate(prop.Angles) end
+					if prop.Scale then matrix:Scale(Vector(prop.Scale, prop.Scale, prop.Scale)) end
+					table.insert(g_staticProps, { obj, matrix })
+					modelToMesh[prop.PropType] = obj
+
+					::cont::
+				end
+			end
+		end)
+		if not ok then g_staticProps = {} end
+		cb(ok, err)
+	end)
+end
+
+local function DrawStaticProps()
+	render.OverrideDepthEnable(true, true)
+	render.SetMaterial(g_propsMaterial)
+    for _, model in pairs(g_staticProps) do
+		cam.PushModelMatrix(model[2])
+		model[1]:Draw()
+		cam.PopModelMatrix()
+    end
+	render.OverrideDepthEnable(false)
+end
+
+local function ToggleStaticProps(cv, old, new)
+	local enable = cv_props:GetBool()
+
+	if enable then
+		LoadStaticProps(function(ok, err)
+			if not ok then
+				ChatMessage(PREFIX_PROPS, "showclips.msg.error")
+				print("[ShowProps]\tError:", err)
+				cv_props:SetInt(0)
+				return
+			end
+
+			UpdatePropsMaterial(g_propsColor.material, g_propsColor.color)
+			hook.Add("PostDrawOpaqueRenderables", "bhop_showprops", DrawStaticProps)
+			ShowHidden.UpdateCountTooltips()
+
+			ChatMessage(PREFIX_PROPS, "showclips.props.enabled")
+		end)
+	else
+		hook.Remove("PostDrawOpaqueRenderables", "bhop_showprops")
+		ChatMessage(PREFIX_PROPS, "showclips.props.disabled")
+	end
+end
+
+local function ChangePropsMaterial(ply, cmd, args)
+	if #args < 1 then
+		print("Usage: " .. cmd .. " MATERIAL_TYPE \"R G B A\"")
+		return
+	end
+
+	local default = DEFAULT_PROPS_COLOR
+	local material = math.floor(math.Clamp(tonumber(args[1]) or default.material, 0, 2))
+	local color = args[2] and string.ToColor(args[2]) or table.Copy(default.color)
+
+	g_propsColor = { material = material, color = color }
+	UpdatePropsMaterial(material, color)
+	ShowHidden.SaveConfig()
+end
+concommand.Add("showprops_material", ChangePropsMaterial, nil, "Sets material and color for static props")
+
+cvars.AddChangeCallback(cv_props:GetName(), ToggleStaticProps, "showclips")
+
+-- [[ Config ]] --
+
+function ShowHidden.SaveConfig()
+	file.Write("showhidden.json", util.TableToJSON({
+		triggers = g_triggersColors,
+		brushes = g_brushesColors,
+		props = g_propsColor,
+	}, false))
+end
+
+local function sanitizeColor(col, default)
+	return {
+		material = math.floor(math.Clamp(tonumber(col.material) or default.material, 0, 2)),
+		color = istable(col.color) and Color(
+			math.floor(math.Clamp(tonumber(col.color.r) or default.color.r, 0, 255)),
+			math.floor(math.Clamp(tonumber(col.color.g) or default.color.g, 0, 255)),
+			math.floor(math.Clamp(tonumber(col.color.b) or default.color.b, 0, 255)),
+			math.floor(math.Clamp(tonumber(col.color.a) or default.color.a, 0, 255))
+		) or table.Copy(default.color),
+	}
+end
+
+function ShowHidden.LoadConfig()
+	local cfg = util.JSONToTable(file.Read("showhidden.json", "DATA") or "") or {}
+
+	cfg.triggers = istable(cfg.triggers) and cfg.triggers or {}
+	cfg.brushes = istable(cfg.brushes) and cfg.brushes or {}
+	g_triggersColors, g_brushesColors = {}, {}
+
+	for _, t in pairs(TriggerType) do
+		local default, col = DEFAULT_TRIGGERS_COLORS[t], cfg.triggers[t]
+		g_triggersColors[t] = istable(col) and sanitizeColor(col, default) or table.Copy(default)
+	end
+	for _, t in pairs(BrushType) do
+		local default, col = DEFAULT_BRUSH_COLORS[t], cfg.brushes[t]
+		g_brushesColors[t] = istable(col) and sanitizeColor(col, default) or table.Copy(default)
+	end
+	g_propsColor = istable(cfg.props) and sanitizeColor(cfg.props, DEFAULT_PROPS_COLOR)
+		or table.Copy(DEFAULT_PROPS_COLOR)
+end
+
+ShowHidden.LoadConfig()
 
 -- [[ GUI ]] --
 
@@ -352,24 +582,26 @@ function PANEL_MATCOLOR:Init()
 end
 
 function PANEL_MATCOLOR:SetMaterial(mat, color, triggerType)
-	local texture = triggerType and "tools/toolstrigger" or "tools/toolsplayerclip"
-	if mat == MaterialEnum.WIREFRAME then
-		texture = "models/wireframe"
-	elseif mat == MaterialEnum.SOLID then
-		texture = "color/white"
+	local name = "ShowHidden2_" .. mat .. "_" .. (triggerType or "")
+	local texture = "color/white" -- MaterialEnum.SOLID
+	if triggerType and mat == MaterialEnum.DEFAULT then
+		texture = triggerType < 0 and BRUSH_TEXTURE_NAME[-triggerType] or "tools/toolstrigger"
 	end
 
-	local name = "ShowHidden2_" .. mat .. "_" .. (triggerType or "")
-	self.Material = CreateMaterial(name, mat == MaterialEnum.WIREFRAME and "Wireframe" or "UnlitGeneric", {
-		["$basetexture"] = texture,
-		["$vertexalpha"] = 1,
-	})
-
+	if mat == MaterialEnum.WIREFRAME or (not triggerType and mat == MaterialEnum.DEFAULT) then
+		self.Material = CreateMaterial(name, "Wireframe", { ["$vertexalpha"] = 1 })
+	else
+		self.Material = CreateMaterial(name, "UnlitGeneric", {
+			["$basetexture"] = texture,
+			["$vertexalpha"] = 1,
+		})
+	end
 	self.Color = color
 	self.Material:SetFloat("$alpha", self.Color.a / 255)
 	self.Material:SetVector("$color", self.Color:ToVector())
-	-- TODO: i18n for Material and Color
-	self:SetTooltip("Material: " .. language.GetPhrase("showhidden.mat." .. mat) .. "\nColor: " .. string.FromColor(color))
+
+	self:SetTooltip(string.format(language.GetPhrase("showhidden.material_tooltip"),
+		language.GetPhrase("showhidden.mat." .. mat), string.FromColor(color)))
 end
 
 function PANEL_MATCOLOR:Paint(w, h)
@@ -390,13 +622,21 @@ end
 
 vgui.RegisterTable(PANEL_MATCOLOR, "Material")
 
+local function getColMatValues(triggerType)
+	if not triggerType then
+		return table.Copy(DEFAULT_PROPS_COLOR), table.Copy(g_propsColor), "#showclips.props"
+	elseif triggerType < 0 then
+		return table.Copy(DEFAULT_BRUSH_COLORS[-triggerType]),
+			table.Copy(g_brushesColors[-triggerType]), "#showclips.type." .. -triggerType
+	end
+	return table.Copy(DEFAULT_TRIGGERS_COLORS[triggerType]),
+		table.Copy(g_triggersColors[triggerType]), "#showtriggers.type." .. triggerType
+end
+
 local function OpenMaterialPicker(triggerType, cb)
-	local clip = not triggerType
-	local default = table.Copy(clip and DEFAULT_CLIPS_COLOR or DEFAULT_TRIGGERS_COLORS[triggerType])
-	local initial = clip and {
-		color = string.ToColor(cv_color:GetString()),
-		material = cv_material:GetInt(),
-	} or table.Copy(g_triggersColors[triggerType])
+	local props, clip = not triggerType, false
+	if triggerType then clip = triggerType < 0 end
+	local default, initial, text = getColMatValues(triggerType)
 	local current = table.Copy(initial)
 
 	local mixer = nil
@@ -447,7 +687,7 @@ local function OpenMaterialPicker(triggerType, cb)
 	end
 
 	local matLab = vgui.Create("DLabel", mats)
-	matLab:SetText(clip and "#showclips" or "#showtriggers.type." .. triggerType)
+	matLab:SetText(text)
 	matLab:Dock(FILL)
 	matLab:SetTextColor(color_black)
 	matLab:SetContentAlignment(6) -- right center
@@ -495,20 +735,22 @@ end
 
 local function OpenConfigMenu()
 	local w = vgui.Create("DFrame")
-	w:SetSize(250, 300)
+	w:SetSize(250, 400)
 	w:DockMargin(2, 26, 2, 2)
 	w:SetTitle("#showhidden.title")
 	w:SetDeleteOnClose(true)
 	w:SetDraggable(true)
 	w:SetSizable(true)
 
-	local function addSiwtch(triggerType, parent)
-		local col = triggerType and g_triggersColors[triggerType] or {
-			color = string.ToColor(cv_color:GetString()),
-			material = cv_material:GetInt(),
-		}
-		local enab = cv_enabled:GetBool()
-		if triggerType then enab = ShowHidden.CheckMask(cv_triggerTypes:GetInt(), triggerType) end
+	local function addSwitch(triggerType, parent)
+		local default, col, text, enab = getColMatValues(triggerType)
+		if not triggerType then
+			enab = cv_props:GetBool()
+		elseif triggerType < 0 then
+			enab = ShowHidden.CheckMask(cv_enabled:GetInt(), -triggerType)
+		else
+			enab = ShowHidden.CheckMask(cv_triggerTypes:GetInt(), triggerType)
+		end
 
 		local pan = vgui.Create("DPanel", parent)
 		pan:SetPaintBackground(false)
@@ -525,13 +767,17 @@ local function OpenConfigMenu()
 		local function update(material, color)
 			mat:SetMaterial(material, color, triggerType)
 
-			if triggerType then
+			if not triggerType then
+				g_propsColor.material, g_propsColor.color = material, color
+				UpdatePropsMaterial(material, color)
+			elseif triggerType < 0 then
+				g_brushesColors[-triggerType].material = material
+				g_brushesColors[-triggerType].color = color
+				UpdateBrushMaterial(-triggerType, material, color)
+			else
 				g_triggersColors[triggerType].material = material
 				g_triggersColors[triggerType].color = color
 				UpdateVisibleTriggers()
-			else
-				cv_color:SetString(string.FromColor(color))
-				cv_material:SetInt(material)
 			end
 		end
 
@@ -539,29 +785,26 @@ local function OpenConfigMenu()
 			OpenMaterialPicker(triggerType, update)
 		end
 		mat.DoRightClick = function()
-			local default = table.Copy(triggerType and DEFAULT_TRIGGERS_COLORS[triggerType] or DEFAULT_CLIPS_COLOR)
 			update(default.material, default.color)
 		end
 
 		local check = pan:Add("DCheckBoxLabel")
-		check:SetText(triggerType and ("#showtriggers.type." .. triggerType) or "#showclips.gui.enable")
+		check:SetText(text)
 		check:SetChecked(enab)
 		check:DockMargin(0, 4, 0, 4)
 		check:Dock(FILL)
 		check:SetTextColor(color_black)
 
 		if not triggerType then
-			check:SetConVar(cv_enabled:GetName())
+			check:SetConVar(cv_props:GetName())
 			return pan
 		end
 
 		check.OnChange = function(self, checked)
-			local types = cv_triggerTypes:GetInt()
-			if checked then
-				cv_triggerTypes:SetInt(bit.bor(types, bit.rol(1, triggerType - 1)))
-			else
-				cv_triggerTypes:SetInt(bit.band(types, bit.bnot(bit.rol(1, triggerType - 1))))
-			end
+			local types = triggerType < 0 and cv_enabled:GetInt() or cv_triggerTypes:GetInt()
+			local cv = triggerType < 0 and cv_enabled or cv_triggerTypes
+			cv:SetInt(checked and bit.bor(types, bit.rol(1, math.abs(triggerType) - 1))
+				or bit.band(types, bit.bnot(bit.rol(1, math.abs(triggerType) - 1))))
 		end
 
 		return pan
@@ -572,7 +815,10 @@ local function OpenConfigMenu()
 	clipsPan:DockMargin(2, 2, 2, 2)
 	clipsPan:Dock(TOP)
 
-	local enabClips = addSiwtch(nil, clipsPan)
+	local brushes = {}
+	for brushType = 1, BrushType.MAX do
+		brushes[brushType] = addSwitch(-brushType, clipsPan)
+	end
 
 	local trigPan = w:Add("DPanel")
 	trigPan:DockPadding(2, 2, 2, 2)
@@ -590,8 +836,16 @@ local function OpenConfigMenu()
 
 	local trigs = {}
 	for triggerType = 1, TriggerType.MAX do
-		trigs[triggerType] = addSiwtch(triggerType, trigPan)
+		trigs[triggerType] = addSwitch(triggerType, trigPan)
 	end
+
+	local propsPan = w:Add("DPanel")
+	propsPan:DockPadding(2, 2, 2, 2)
+	propsPan:DockMargin(2, 2, 2, 2)
+	propsPan:SetHeight(32)
+	propsPan:Dock(TOP)
+
+	local enabProps = addSwitch(nil, propsPan)
 
 	local close = w:Add("DButton")
 	close:SetText("#close")
@@ -600,18 +854,25 @@ local function OpenConfigMenu()
 	close.DoClick = function() w:Close() end
 
 	function w.UpdateCountTooltips()
-		enabClips:SetTooltip(language.GetPhrase("showhidden.count") .. (g_clipBrushes and #g_clipBrushes or "N/A"))
+		enabProps:SetTooltip(language.GetPhrase("showhidden.count") .. (g_staticProps and #g_staticProps or "N/A"))
 		enabTrig:SetTooltip(language.GetPhrase("showhidden.count") .. (g_triggersCount[0] or "N/A"))
 
+		local enab = cv_triggers:GetBool()
 		for triggerType = 1, TriggerType.MAX do
 			trigs[triggerType]:SetTooltip(language.GetPhrase("showhidden.count") .. (g_triggersCount[triggerType] or "N/A"))
+			trigs[triggerType]:SetEnabled(enab)
+		end
+
+		for brushType = 1, BrushType.MAX do
+			local count = g_brushesCount[brushType] -- g_brushMeshes[brushType] and #g_brushMeshes[brushType] or g_brushesCount[brushType]
+			brushes[brushType]:SetTooltip(language.GetPhrase("showhidden.count") .. (count or "N/A"))
 		end
 	end
 
 	w.OnClose = function()
 		g_configMenu = nil
 		UpdateVisibleTriggers()
-		SaveTriggersColors()
+		ShowHidden.SaveConfig()
 	end
 
 	clipsPan:InvalidateLayout(true)
@@ -635,31 +896,3 @@ function ShowHidden.UpdateCountTooltips()
 end
 
 concommand.Add("showhidden", OpenConfigMenu, nil, "Open PlayerClips and ShowTriggers settings menu")
-
--- [[ i18n ]] --
-
-language.Add("showhidden.title", "PlayerClips & ShowTriggers menu")
-language.Add("showhidden.count", "Count: ")
-language.Add("showhidden.reset", "Reset")
-language.Add("showhidden.mat.0", "Wireframe")
-language.Add("showhidden.mat.1", "Default")
-language.Add("showhidden.mat.2", "Solid color")
-
-language.Add("showclips.msg.lags", "Reading player clips information from map. There may be some lags...")
-language.Add("showclips.msg.enabled", "Player clips are enabled. Use !clipsmenu to configure")
-language.Add("showclips.msg.disabled", "Player clips are now disabled!")
-language.Add("showclips.msg.error", "Cant load player clips (see error message in console ~)")
-language.Add("showclips.gui.enable", "Draw player-clip brushes")
-language.Add("showclips", "Player clip brushes")
-
-language.Add("showtriggers.msg.enabled", "Triggers are enabled. Use !triggersmenu to configure")
-language.Add("showtriggers.msg.disabled", "Triggers are now disabled!")
-language.Add("showtriggers.gui.enable", "Show trigger brushes")
-language.Add("showtriggers.type.1", "Other triggers...")
-language.Add("showtriggers.type.2", "Teleports (reset)")
-language.Add("showtriggers.type.3", "Teleports with filter")
-language.Add("showtriggers.type.4", "Boosters: push")
-language.Add("showtriggers.type.5", "Boosters: base-velocity")
-language.Add("showtriggers.type.6", "Boosters: gravity")
-language.Add("showtriggers.type.7", "PreSpeed prevention")
-language.Add("showtriggers.type.8", "BunnyHop platforms")

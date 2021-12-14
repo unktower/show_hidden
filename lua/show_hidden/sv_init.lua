@@ -94,6 +94,7 @@ local function CheckTrigger(ent)
 			-- Other teleports with filter
 			AddTrigger(ent, TriggerType.TELE_FILTER)
 		end
+		-- SetNWVector of destination
 	elseif class == "trigger_push" then
 		AddTrigger(ent, TriggerType.PUSH)
 	elseif g_savedOutputs[ent] then
@@ -236,7 +237,7 @@ end
 local function ShowClips(ply) ply:ConCommand("showclips 1") end
 local function HideClips(ply) ply:ConCommand("showclips 0") end
 local function ToggleClips(ply)
-	ply:ConCommand("showclips " .. (ply:GetInfoNum("showclips", 0) == 1 and "0" or "1"))
+	ply:ConCommand("showclips " .. (ply:GetInfoNum("showclips", 0) == 0 and "1" or "0"))
 end
 
 local function ShowTriggers(ply) ply:ConCommand("showtriggers_enabled 1") end
@@ -245,14 +246,26 @@ local function ToggleTriggers(ply)
 	ply:ConCommand("showtriggers_enabled " .. (ply:GetInfoNum("showtriggers_enabled", 0) == 1 and "0" or "1"))
 end
 
+local function ShowProps(ply) ply:ConCommand("showprops 1") end
+local function HideProps(ply) ply:ConCommand("showprops 0") end
+local function ToggleProps(ply)
+	ply:ConCommand("showprops " .. (ply:GetInfoNum("showprops", 0) == 1 and "0" or "1"))
+end
+
 local CHAT_COMMANDS = {
 	[OpenMenu] =        { "showhidden", "clipsmenu", "triggersmenu", "showclipsmenu", "showtriggersmenu" },
+
 	[ToggleClips] =     { "playerclips", "clips", "toggleclips" },
 	[ShowClips] =       { "showclips", "showclip"},
 	[HideClips] =       { "hideclips", "hideclip" },
+
 	[ToggleTriggers] =  { "triggers", "trigger", "toggletriggers" },
 	[ShowTriggers] =    { "showtriggers", "showtrigger" },
 	[HideTriggers] =    { "hidetriggers", "hidetrigger" },
+
+	[ToggleProps] =     { "staticprops", "togglestaticprops" },
+	[ShowProps] =       { "showprops", "showstaticprops" },
+	[HideProps] =       { "hideprops", "hidestaticprops" },
 }
 
 local function FallbackChatCommandHandler(ply, str)

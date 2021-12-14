@@ -9,6 +9,7 @@ if SERVER then
 	AddCSLuaFile("show_hidden/lib/luabsp.lua")
 	AddCSLuaFile("show_hidden/sh_init.lua")
 	AddCSLuaFile("show_hidden/cl_init.lua")
+	AddCSLuaFile("show_hidden/cl_lang.lua")
 
 	include("show_hidden/sh_init.lua")
 	include("show_hidden/sv_init.lua")
@@ -17,4 +18,5 @@ else
 
 	include("show_hidden/sh_init.lua")
 	include("show_hidden/cl_init.lua")
+	include("show_hidden/cl_lang.lua")
 end
