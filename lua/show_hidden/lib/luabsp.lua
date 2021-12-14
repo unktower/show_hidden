@@ -1,8 +1,3 @@
---[[
-    luabsp-gmod by h3xcat under GPL-3.0 License
-    Repository: https://github.com/h3xcat/gmod-luabsp
-]]
-
 local lib_id =  debug.getinfo( 1, "S" ).short_src
 local luabsp = {}
 
@@ -139,7 +134,7 @@ local function vertices_from_planes( planes )
     local verts = {}
 
     for i=1, #planes do
-        local N1 = planes[i];
+        local N1 = planes[i]
 
         for j=i+1, #planes do
             local N2 = planes[j]
@@ -277,7 +272,22 @@ do
         [LUMP_VISIBILITY] = -- Compressed visibility bit arrays
             function(fl, lump_data) end,
         [LUMP_NODES] = -- BSP tree nodes
-            function(fl, lump_data) end,
+            function(fl, lump_data)
+                lump_data.data = {}
+                lump_data.size = lump_data.filelen / 32
+                for i=0, lump_data.size - 1 do
+                    lump_data.data[i] = {
+                        planenum = fl:ReadLong(), -- index into plane array
+                        children = { fl:ReadLong(), fl:ReadLong() }, -- negative numbers are -(leafs + 1), not nodes
+                        mins = Vector(  fl:ReadShort(), fl:ReadShort(), fl:ReadShort() ), -- for frustum culling
+                        maxs = Vector(  fl:ReadShort(), fl:ReadShort(), fl:ReadShort() ),
+                        firstface = unsigned( fl:ReadShort(), 2 ),
+                        numfacesu = unsigned( fl:ReadShort(), 2 ),
+                        area = fl:ReadShort(), -- If all leaves below this node are in the same area, then this is the area index. If not, this is -1.
+                    }
+                    fl:ReadShort() -- pad to 32 bytes length
+                end
+            end,
         [LUMP_TEXINFO] = -- Face texture array
             function(fl, lump_data)
                 lump_data.data = {}
@@ -293,7 +303,7 @@ do
                             { x = fl:ReadFloat(), y = fl:ReadFloat(), z = fl:ReadFloat(), offset = fl:ReadFloat()},
                         },
                         flags = fl:ReadLong(),
-                        textdata = fl:ReadLong(),
+                        texdata = fl:ReadLong(),
                     }
                 end
             end,
@@ -339,7 +349,32 @@ do
         [LUMP_OCCLUSION] = -- Occlusion polygons and vertices
             function(fl, lump_data) end,
         [LUMP_LEAFS] = -- BSP tree leaf nodes
-            function(fl, lump_data) end,
+            function(fl, lump_data)
+                lump_data.data = {}
+                lump_data.size = lump_data.filelen / 30
+                for i=0, lump_data.size - 1 do
+                    local data = {
+                        contents = fl:ReadLong(), -- OR of all brushes (not needed?)
+                        cluster = fl:ReadShort(), -- cluster this leaf is in
+                        flags = fl:ReadShort(), -- area this leaf is in and flags
+                        mins = Vector( fl:ReadShort(), fl:ReadShort(), fl:ReadShort() ), -- for frustum culling
+                        maxs = Vector( fl:ReadShort(), fl:ReadShort(), fl:ReadShort() ),
+                        firstleafface = unsigned( fl:ReadShort(), 2 ), -- index into leaffaces
+                        numleaffaces = unsigned( fl:ReadShort(), 2 ),
+                        firstleafbrush = unsigned( fl:ReadShort(), 2 ), -- index into leafbrushes
+                        numleafbrushes = unsigned( fl:ReadShort(), 2 ),
+                        leafWaterDataID = fl:ReadShort(),
+                    }
+
+                    data.area = bit.band(data.flags, 0x7F)
+                    data.flags = bit.band(bit.rshift(data.flags, 9), 0x1FF)
+                    lump_data.data[i] = data
+                    fl:Read(2) -- padding
+
+                    -- TODO: for maps of version 19 or lower uncomment this block
+                    -- fl:Read(26) -- ambientLighting and padding
+                end
+            end,
         [LUMP_FACEIDS] = -- Correlates between dfaces and Hammer face IDs. Also used as random seed for detail prop placement.
             function(fl, lump_data) end,
         [LUMP_EDGES] = -- Edge array
@@ -362,13 +397,38 @@ do
                 end
             end,
         [LUMP_MODELS] = -- Brush models (geometry of brush entities)
-            function(fl, lump_data) end,
+            function(fl, lump_data)
+                lump_data.data = {}
+                lump_data.size = lump_data.filelen / 48
+                for i=0, lump_data.size - 1 do
+                    lump_data.data[i] = {
+                        mins = Vector( fl:ReadFloat(), fl:ReadFloat(), fl:ReadFloat() ), -- bounding box
+                        maxs = Vector( fl:ReadFloat(), fl:ReadFloat(), fl:ReadFloat() ),
+                        origin = Vector( fl:ReadFloat(), fl:ReadFloat(), fl:ReadFloat() ), -- for sounds or lights
+                        headnode = fl:ReadLong(), -- index into node array
+                        firstface = fl:ReadLong(), -- index into face array
+                        numfaces = fl:ReadLong(),
+                    }
+                end
+            end,
         [LUMP_WORLDLIGHTS] = -- Internal world lights converted from the entity lump
             function(fl, lump_data) end,
         [LUMP_LEAFFACES] = -- Index to faces in each leaf
-            function(fl, lump_data) end,
+            function(fl, lump_data)
+                lump_data.data = {}
+                lump_data.size = lump_data.filelen / 2
+                for i=0, lump_data.size - 1 do
+                    lump_data.data[i] = unsigned( fl:ReadShort(), 2 )
+                end
+            end,
         [LUMP_LEAFBRUSHES] = -- Index to brushes in each leaf
-            function(fl, lump_data) end,
+            function(fl, lump_data)
+                lump_data.data = {}
+                lump_data.size = lump_data.filelen / 2
+                for i=0, lump_data.size - 1 do
+                    lump_data.data[i] = unsigned( fl:ReadShort(), 2 )
+                end
+            end,
         [LUMP_BRUSHES] = -- Brush array
             function(fl, lump_data)
                 lump_data.data = {}
@@ -453,7 +513,22 @@ do
         [LUMP_CLIPPORTALVERTS] = -- Clipped portal polygon vertices
             function(fl, lump_data) end,
         [LUMP_CUBEMAPS] = -- env_cubemap location array
-            function(fl, lump_data) end,
+            function(fl, lump_data)
+                lump_data.data = {}
+                lump_data.size = lump_data.filelen / 16
+
+                for i=0, lump_data.size - 1 do
+                    local origin = Vector(fl:ReadLong(), fl:ReadLong(), fl:ReadLong())
+                    local size = fl:ReadLong()
+
+                    if size < 1 then size = 6 end -- default size should be 32x32
+
+                    lump_data.data[i] = {
+                        origin = origin,
+                        size = 2^(size-1)
+                    }
+                end
+            end,
         [LUMP_TEXDATA_STRING_DATA] = -- Texture name data
             function(fl, lump_data)
                 lump_data.data = {}
@@ -461,7 +536,7 @@ do
                 local offset = 0
                 for k, v in pairs(data) do
                     lump_data.data[offset] = v
-                    offset = offset + 1 +  #v
+                    offset = offset + 1 + #v
                 end
             end,
         [LUMP_TEXDATA_STRING_TABLE] = -- Index array into texdata string data
@@ -536,6 +611,7 @@ do
 
         self.version = fl:ReadLong() -- BSP file version
         self.lumps = {} -- lump directory array
+        self.weakLumps = setmetatable({}, { __mode = "v" })
 
         for i=0, HEADER_LUMPS-1 do
             self.lumps[i] = {
@@ -565,8 +641,10 @@ do
 
         for k, lump in ipairs( {...} ) do
             local lump_data = self.lumps[lump]
-            fl:Seek( lump_data.fileofs )
-            lump_parsers[lump]( fl, lump_data )
+            if not lump_data.data and not self.weakLumps[lump] then
+                fl:Seek( lump_data.fileofs )
+                lump_parsers[lump]( fl, lump_data )
+            end
         end
 
         fl:Close()
@@ -676,6 +754,403 @@ do
         fl:Close()
     end
 
+    -- [ Utils ] --
+
+    --- Get or load (if doesnt exist) leaf data with weak caching
+    function LuaBSP:GetLumpData(lump, force, keep)
+        local lump_data = self.lumps[lump]
+
+        if (lump_data.data or self.weakLumps[lump]) == nil or force then
+            local fl = self:GetMapFileHandle()
+            fl:Seek(lump_data.fileofs)
+            lump_parsers[lump](fl, lump_data)
+            fl:Close()
+
+            if force and not keep then
+                self.weakLumps[lump] = lump_data.data
+                lump_data.data = nil
+            end
+        end
+
+        return lump_data.data or self.weakLumps[lump]
+    end
+
+    --- Get texdata structure with texture name
+    function LuaBSP:GetTexData(texdata_id)
+        local texdata = self:GetLumpData(LUMP_TEXDATA)[texdata_id]
+        if texdata.p_nameString then return texdata end
+        local offset = self:GetLumpData(LUMP_TEXDATA_STRING_TABLE)[texdata.nameStringTableID]
+        texdata.p_nameString = self:GetLumpData(LUMP_TEXDATA_STRING_DATA)[offset]
+        return texdata
+    end
+
+    --- Convert vertices to MeshVertex triangles struct
+    function LuaBSP:PointsToMeshVerts(points, norm, mesh_verts, color)
+        local ref = Vector(0, 0, -1)
+        if math.abs(norm:Dot(Vector(0, 0, 1))) == 1 then ref = Vector(0, 1, 0) end
+
+        local tv1 = norm:Cross(ref):Cross(norm):GetNormalized()
+        local tv2 = norm:Cross(tv1)
+
+        local textureVecs = {
+            { x = tv2.x, y = tv2.y, z = tv2.z, offset = 0 },
+            { x = tv1.x, y = tv1.y, z = tv1.z, offset = 0 },
+        }
+
+        for j = 1, #points - 2 do
+            local u1, v1 = find_uv(points[1],     textureVecs, 32, 32)
+            local u2, v2 = find_uv(points[j + 1], textureVecs, 32, 32)
+            local u3, v3 = find_uv(points[j + 2], textureVecs, 32, 32)
+            mesh_verts[#mesh_verts + 1] = { pos = points[1],     u = u1, v = v1 }
+            mesh_verts[#mesh_verts + 1] = { pos = points[j + 1], u = u2, v = v2 }
+            mesh_verts[#mesh_verts + 1] = { pos = points[j + 2], u = u3, v = v3 }
+        end
+    end
+
+    -- [ Visibility ] --
+
+    local FindLeafTraverse
+    FindLeafTraverse = function(lumps, node_id, pos)
+        if node_id < 0 then return -(node_id + 1) end
+
+        local node = lumps[LUMP_NODES]["data"][node_id]
+        local plane = lumps[LUMP_PLANES]["data"][node.planenum]
+        local d = pos.x*plane.A + pos.y*plane.B + pos.z*plane.C
+
+        return FindLeafTraverse(lumps, node.children[(d - plane.D > 0) and 1 or 2], pos)
+    end
+
+    --- Find leaf in BSP tree by given world position
+    function LuaBSP:FindLeaf(pos)
+        self:GetLumpData(LUMP_NODES) self:GetLumpData(LUMP_PLANES)
+        local leaf_id = FindLeafTraverse(self.lumps, 0, pos)
+        local leaf = self:GetLumpData(LUMP_LEAFS)[leaf_id]
+        return leaf_id, leaf
+    end
+
+    local AddNodeLeafsTraverse
+    AddNodeLeafsTraverse = function(nodes, node_id, leafs)
+        if node_id < 0 then
+            leafs[#leafs + 1] = -(node_id + 1)
+            return
+        end
+
+        local children = nodes[node_id].children
+        AddNodeLeafsTraverse(nodes, children[1], leafs)
+        AddNodeLeafsTraverse(nodes, children[2], leafs)
+    end
+
+    --- Get leafs array by given node_id (travels BSP tree)
+    function LuaBSP:GetNodeLeafs(node_id)
+        local nodes, leafs = self:GetLumpData(LUMP_NODES), {}
+        AddNodeLeafsTraverse(nodes, node_id, leafs)
+        return leafs
+    end
+
+    -- [ Faces ] --
+
+    --- Get faces mesh(es) filtered by SURF_ enum and texture name pattern
+    -- @param original will use LUMP_ORIGINALFACES if true
+    function LuaBSP:GetFacesMesh(surf_flags, texture_name, single_mesh, original)
+        local target_lump = original and LUMP_ORIGINALFACES or LUMP_FACES
+        self:LoadLumps(target_lump, LUMP_SURFEDGES, LUMP_EDGES, LUMP_PLANES, LUMP_TEXINFO,
+            LUMP_TEXDATA, LUMP_TEXDATA_STRING_DATA, LUMP_TEXDATA_STRING_TABLE)
+
+        local faces = self:GetLumpData(target_lump)
+        local brush_verts, meshes, count = {}, {}, 0
+
+        for face_id, face in pairs(faces) do
+            local texinfo = self:GetLumpData(LUMP_TEXINFO)[face.texinfo]
+            if not texinfo or face.dispinfo ~= -1 then continue end
+
+            local texdata = self:GetTexData(texinfo.texdata)
+            if surf_flags and (surf_flags < 0 or texinfo.flags ~= surf_flags)
+                and (surf_flags >= 0 or bit.band(texinfo.flags, surf_flags) == 0) then continue end
+            if texture_name and not string.find(texdata.p_nameString, texture_name) then continue end
+
+            if not single_mesh then brush_verts = {} end
+
+            self:AddFaceVertices(face, brush_verts)
+
+            count = count + 1
+            if not single_mesh then
+                local obj = Mesh()
+                obj:BuildFromTriangles(brush_verts)
+                meshes[face_id] = obj
+            end
+        end
+
+        if single_mesh then
+            local obj = Mesh()
+            obj:BuildFromTriangles(brush_verts)
+            return obj, count
+        end
+
+        return meshes, count
+    end
+
+    --- Add MeshVertex to mesh_verts table by given face
+    function LuaBSP:AddFaceVertices(face, mesh_verts)
+        local verts = self:GetLumpData(LUMP_VERTEXES)
+        local plane = self:GetLumpData(LUMP_PLANES)[face.planenum]
+        local points = {}
+
+        for i = 0, face.numedges - 1 do
+            local index = self:GetLumpData(LUMP_SURFEDGES)[face.firstedge + i]
+            local edge = self:GetLumpData(LUMP_EDGES)[math.abs(index)]
+
+            if index < 0 then
+                points[#points + 1], points[#points + 2] = verts[edge[2]], verts[edge[1]]
+            else
+                points[#points + 1], points[#points + 2] = verts[edge[1]], verts[edge[2]]
+            end
+        end
+
+        self:PointsToMeshVerts(points, Vector(plane.A, plane.B, plane.C), mesh_verts)
+
+        return points
+    end
+
+    -- [ Brushes ] --
+
+    --- Adds (brush_id, leaf_id) key-value pair to brushes table
+    -- @param leaf_brushes - LUMP_LEAFBRUSHES lump data
+    function LuaBSP:AddBrushToLeafMap(leaf, leaf_id, leaf_brushes, brushes)
+        local firstBrush, numBrushes = leaf.firstleafbrush, leaf.numleafbrushes
+        for i = 0, numBrushes - 1 do
+            local idx = leaf_brushes[firstBrush + i]
+            if idx then brushes[idx] = leaf_id end
+        end
+        return brushes
+    end
+
+    --- Get brushes ids array by given leaf id
+    function LuaBSP:GetBrushesByLeaf(leaf_id)
+        return table.GetKeys(self:AddBrushToLeafMap(self:GetLumpData(LUMP_LEAFS)[leaf_id],
+            leaf_id, self:GetLumpData(LUMP_LEAFBRUSHES), {}))
+    end
+
+    --- Get brushes ids of the brush-model
+    function LuaBSP:GetBrushesByModel(model_id)
+        local model = self:GetLumpData(LUMP_MODELS)[model_id]
+        local leafs = self:GetLumpData(LUMP_LEAFS)
+        local leafs_ids = self:GetNodeLeafs(model.headnode)
+        local brushes, leaf_brushes = {}, self:GetLumpData(LUMP_LEAFBRUSHES)
+
+        for _, leaf_id in ipairs(leafs_ids) do
+            self:AddBrushToLeafMap(leafs[leaf_id], leaf_id, leaf_brushes, brushes)
+        end
+
+        return table.GetKeys(brushes), model
+    end
+
+    --- Get mesh of the brush-bmodel (not mdl)
+    function LuaBSP:GetModelMesh(model_id)
+        self:LoadLumps(LUMP_BRUSHES, LUMP_BRUSHSIDES, LUMP_PLANES)
+        local brushes_arr, model = self:GetBrushesByModel(model_id)
+        local brushes, brush_verts = self.lumps[LUMP_BRUSHES]["data"], {}
+
+        for _, brush_id in ipairs(brushes_arr) do
+            local brush = brushes[brush_id]
+            if not brush then continue end
+            local bsides, points = self:GetBrushSides(brush)
+            self:AddBrushVertices(bsides, points, brush_verts)
+        end
+
+        local obj = Mesh()
+        obj:BuildFromTriangles(brush_verts)
+        return obj, model, brushes_arr
+    end
+
+    --- Get brushes table filtered by CONTENTS_ enum
+    function LuaBSP:GetBrushesByContents(contents)
+        self:LoadLumps(LUMP_BRUSHES)
+
+        local brushes, result = self.lumps[LUMP_BRUSHES]["data"], {}
+
+        for brush_id = 0, #brushes - 1 do
+            local brush = brushes[brush_id]
+            if bit.band(brush.contents, contents) ~= 0 then result[#result + 1] = brush end
+        end
+
+        return result
+    end
+
+    --- Filter out brush side vertices by given plane of this side
+    function LuaBSP:GetBrushSidePoints(plane, brush_points)
+        local points = {}
+
+        for __, point in pairs(brush_points) do
+            local t = point.x*plane.A + point.y*plane.B + point.z*plane.C
+            if math.abs(t - plane.D) > 0.01 then continue end -- Not on a plane
+            points[#points + 1] = point
+        end
+
+        -- sort them in clockwise order
+        local norm, c = Vector(plane.A, plane.B, plane.C), points[1]
+        table.sort(points, function(a, b)
+            return norm:Dot((c - a):Cross(b - c)) > 0.001
+        end)
+
+        return points
+    end
+
+    --- Get table of bsides structure of the brush (brush sides) and brush vertices
+    -- Filtered by SURF_ enum and texture name pattern
+    function LuaBSP:GetBrushSidesFiltered(brush, surf_flags, texture_name)
+        local brush_firstside = brush.firstside
+        local brush_numsides = brush.numsides
+        local bsides, planes = {}, {}
+
+        for i = 0, brush_numsides - 1 do
+            local brushside = self.lumps[LUMP_BRUSHSIDES]["data"][brush_firstside + i]
+            local texinfo = self.lumps[LUMP_TEXINFO]["data"][brushside.texinfo]
+            local texdata = self:GetTexData(texinfo.texdata)
+
+            if brushside.bevel ~= 0 then continue end
+
+            local plane = self.lumps[LUMP_PLANES]["data"][brushside.planenum]
+            planes[#planes + 1] = plane
+
+            if surf_flags and (surf_flags < 0 or texinfo.flags ~= surf_flags)
+                and (surf_flags >= 0 or bit.band(texinfo.flags, -surf_flags) == 0) then continue end
+            if texture_name and not string.find(texdata.p_nameString, texture_name) then continue end
+
+            bsides[#bsides + 1] = {
+                brushside = brushside,
+                texinfo = texinfo,
+                texdata = texdata,
+                plane = plane,
+            }
+        end
+
+        return bsides, #bsides ~= 0 and vertices_from_planes(planes) or bsides
+    end
+
+    --- Get table of bsides structure of the brush (brush sides) and brush vertices
+    function LuaBSP:GetBrushSides(brush)
+        local brush_firstside = brush.firstside
+        local brush_numsides = brush.numsides
+        local bsides, planes = {}, {}
+
+        for i = 0, brush_numsides - 1 do
+            local brushside = self.lumps[LUMP_BRUSHSIDES]["data"][brush_firstside + i]
+
+            if brushside.bevel ~= 0 then continue end
+
+            local plane = self.lumps[LUMP_PLANES]["data"][brushside.planenum]
+            planes[#planes + 1] = plane
+            bsides[#bsides + 1] = {
+                brushside = brushside,
+                plane = plane,
+            }
+        end
+
+        return bsides, vertices_from_planes(planes)
+    end
+
+    --- Same as LuaBSP:AddBrushVertices but sets only pos for vertices
+    function LuaBSP:GetBrushCollisionVertices(bsides, brush_points)
+        local brush_verts = {}
+
+        for _, bside in pairs(bsides) do
+            local plane = bside.plane
+            if not plane then continue end
+
+            local points = self:GetBrushSidePoints(plane, brush_points)
+
+            for j = 1, #points - 2 do
+                brush_verts[#brush_verts + 1] = { pos = points[1]     }
+                brush_verts[#brush_verts + 1] = { pos = points[j + 1] }
+                brush_verts[#brush_verts + 1] = { pos = points[j + 2] }
+            end
+        end
+
+        return brush_verts
+    end
+
+    --- Add MeshVertex structures to `brush_verts` table using bsides structure and brush vertices
+    function LuaBSP:AddBrushVertices(bsides, brush_points, brush_verts)
+        for _, bside in pairs(bsides) do
+            local plane = bside.plane
+            if not plane then continue end
+
+            local points = self:GetBrushSidePoints(plane, brush_points)
+            self:PointsToMeshVerts(points, Vector(plane.A, plane.B, plane.C), brush_verts)
+        end
+    end
+
+    --- Get brushes mesh(es) by CONTENTS_, SURF_ enums and texture name pattern
+    function LuaBSP:GetBrushesMeshFiltered(contents, surf_flags, texture_name, single_mesh)
+        self:LoadLumps(LUMP_BRUSHES, LUMP_BRUSHSIDES, LUMP_PLANES, LUMP_TEXINFO,
+            LUMP_TEXDATA, LUMP_TEXDATA_STRING_DATA, LUMP_TEXDATA_STRING_TABLE)
+
+        local brushes = self.lumps[LUMP_BRUSHES]["data"]
+        local brush_verts, meshes, count = {}, {}, 0
+
+        for brush_id = 0, #brushes - 1 do
+            local brush = brushes[brush_id]
+            if contents and (contents < 0 or brush.contents ~= contents)
+                and (contents >= 0 or bit.band(brush.contents, -contents) == 0) then continue end
+
+            if not single_mesh then brush_verts = {} end
+
+            local bsides, points = self:GetBrushSidesFiltered(brush, surf_flags, texture_name)
+            if #bsides == 0 then continue end
+
+            self:AddBrushVertices(bsides, points, brush_verts)
+
+            count = count + 1
+            if not single_mesh then
+                local obj = Mesh()
+                obj:BuildFromTriangles(brush_verts)
+                meshes[brush_id] = obj
+            end
+        end
+
+        if single_mesh then
+            local obj = Mesh()
+            obj:BuildFromTriangles(brush_verts)
+            return obj, count
+        end
+
+        return meshes, count
+    end
+
+    --- Get brushes mesh(es) by contents enum
+    function LuaBSP:GetBrushesMesh(contents, single_mesh)
+        self:LoadLumps(LUMP_BRUSHES, LUMP_BRUSHSIDES, LUMP_PLANES)
+
+        local brushes = self.lumps[LUMP_BRUSHES]["data"]
+        local brush_verts, meshes, count = {}, {}, 0
+
+        for brush_id = 0, #brushes - 1 do
+            local brush = brushes[brush_id]
+
+            if contents and bit.band(brush.contents, contents) == 0 then continue end
+
+            if not single_mesh then brush_verts = {} end
+
+            local bsides, points = self:GetBrushSides(brush)
+            self:AddBrushVertices(bsides, points, brush_verts)
+
+            count = count + 1
+            if not single_mesh then
+                local obj = Mesh()
+                obj:BuildFromTriangles(brush_verts)
+                meshes[brush_id] = obj
+            end
+        end
+
+        if single_mesh then
+            local obj = Mesh()
+            obj:BuildFromTriangles(brush_verts)
+            return obj, count
+        end
+
+        return meshes
+    end
+
     function LuaBSP:GetClipBrushes( single_mesh )
         self:LoadLumps( LUMP_BRUSHES, LUMP_BRUSHSIDES, LUMP_PLANES, LUMP_TEXINFO )
 
@@ -747,7 +1222,6 @@ do
 
                 local texinfo = self.lumps[LUMP_TEXINFO]["data"][render_data.texinfo]
 
-
                 local ref = Vector(0,0,-1)
                 if math.abs( norm:Dot( Vector(0,0,1) ) ) == 1 then
                     ref = Vector(0,1,0)
@@ -788,7 +1262,6 @@ do
         return brushes
     end
 end
-
 
 --------------------------------------------------------------------------------
 --------------------------------------------------------------------------------
