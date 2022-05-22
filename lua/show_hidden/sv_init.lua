@@ -11,8 +11,6 @@ local TRACK_OUTPUTS = {
 
 -- TODO: create module for reading entities' outputs
 -- TODO: diff 1-hop and bhop platforms?
--- TODO: show only filter accessible triggers?
--- FIXME: invalid triggers?
 
 local g_triggers = {}
 local g_savedOutputs = {}
@@ -41,9 +39,9 @@ local function RecordOutputs(ent, key, value)
 
 	local delay = tonumber(args[4]) or 0
 	local k, v = unpack(string.Explode(" ", args[3], false))
-	-- TODO: record classnames too
-	if delay > 0 and delay < 0.1 and k == "targetname" then
-		g_platformTargetNames[v] = true
+
+	if delay > 0 and delay < 0.1 and (k == "targetname" or k == "classname") then
+		g_platformTargetNames[k .. " " .. v] = true
 	end
 end
 hook.Add("EntityKeyValue", "ShowTriggers.RecordOutputs", RecordOutputs)
@@ -54,7 +52,11 @@ local function CheckPlatformFilter(name)
 	local result = false
 
 	for i, ent in ipairs(ents.FindByName(name)) do
-		if g_platformTargetNames[ent:GetInternalVariable("m_iFilterName")] then
+		if g_platformTargetNames["targetname " .. (ent:GetInternalVariable("m_iFilterName") or "")] then
+			result = true
+			break
+		end
+		if g_platformTargetNames["classname " .. (ent:GetInternalVariable("m_iFilterClass") or "")] then
 			result = true
 			break
 		end
@@ -196,8 +198,6 @@ hook.Add("OnEntityCreated", "ShowTriggers.NewTrigger", function(ent)
 		timer.Simple(0.1, function() -- wait for keyvalues
 			if IsValid(ent) then CheckTrigger(ent) end
 		end)
-
-		-- print("[ShowTriggers]\tCREATED", ent)
 	end
 end)
 
@@ -208,8 +208,6 @@ hook.Add("EntityRemoved", "ShowTriggers.RemoveTrigger", function(ent)
 		g_savedOutputs[ent] = nil
 		table.RemoveByValue(triggers, ent)
 	end
-
-	-- print("[ShowTriggers]\tREMOVED", ent)
 end)
 
 -- Disable triggers visibility for players by default
@@ -283,8 +281,6 @@ local function FallbackChatCommandHandler(ply, str)
 end
 
 function AddChatCommands()
-	print("[ShowHidden]\tAdd chat commands...")
-
 	if istable(Command) and isfunction(Command.Register) then
 		-- FLOW v7
 		for func, commands in pairs(CHAT_COMMANDS) do
@@ -297,6 +293,7 @@ function AddChatCommands()
 		end
 	else
 		-- Default fallback
+		print("[ShowHidden]\tAdd chat commands")
 		hook.Add("PlayerSay", "ShowHidden.PlayerSay", FallbackChatCommandHandler)
 	end
 end

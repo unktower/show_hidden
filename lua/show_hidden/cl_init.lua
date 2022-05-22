@@ -7,11 +7,7 @@ local PREFIX_COLORS = {
 	[PREFIX_PROPS] =    Color(0, 255, 128, 200),
 }
 
-local MaterialEnum = {
-	WIREFRAME = 0,
-	DEFAULT = 1, -- trigger or player-clip texture
-	SOLID = 2, -- solid color material
-}
+local MaterialEnum = ShowHidden.MaterialEnum
 
 local function ChatMessage(prefix, phrase)
 	chat.AddText(color_white, "[", PREFIX_COLORS[prefix], prefix, color_white, "] ", language.GetPhrase(phrase))
@@ -129,7 +125,7 @@ local function UpdateVisibleTriggers()
 	end
 end
 
--- Recieve triggers triggers count from server
+-- Recieve triggers count from server
 net.Receive("ShowHidden.ShowTriggers", function()
 	local enabledTypes = cv_triggerTypes:GetInt()
 	local total = 0
@@ -421,6 +417,7 @@ end
 
 local function GetModelCollisionMesh(model)
 	-- TODO: add support for SOLID_BBOX
+	-- TODO: ignore ERROR models?
     local ent = ents.CreateClientProp(model)
     ent:Spawn()
     local phys = ent:GetPhysicsObject()
