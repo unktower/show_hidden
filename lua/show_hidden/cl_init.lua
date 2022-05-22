@@ -659,9 +659,16 @@ local function OpenMaterialPicker(triggerType, cb)
 	end
 
 	local pan = vgui.Create("DPanel")
-	pan:SetPaintBorderEnabled(true)
-	pan:DockPadding(2, 2, 2, 2)
+	pan:SetPaintBorderEnabled(false)
+	pan:SetPaintBackgroundEnabled(false)
+	pan:DockPadding(4, 4, 4, 4)
 	pan:SetSize(300, 300)
+
+	function pan:Paint(w, h)
+        draw.RoundedBox(4, 0, 0, w, h, Color(127, 127, 127, 127))
+		surface.SetDrawColor(0, 255, 0, 255)
+		surface.DrawOutlinedRect(300 - 3 - 36 * (current.material + 1), 5, 34, 34, 1)
+    end
 
 	local m = DermaMenu()
 	m:AddPanel(pan)
@@ -669,7 +676,7 @@ local function OpenMaterialPicker(triggerType, cb)
 	local mats = vgui.Create("DPanel", pan)
 	mats:SetPaintBackground(false)
 	mats:SetHeight(32)
-	mats:DockMargin(2, 2, 2, 2)
+	mats:DockMargin(2, 2, 2, 6)
 	mats:Dock(TOP)
 
 	for _, material in pairs(MaterialEnum) do
@@ -704,7 +711,7 @@ local function OpenMaterialPicker(triggerType, cb)
 	local buttons = vgui.Create("DPanel", pan)
 	buttons:SetPaintBackground(false)
 	buttons:SetHeight(24)
-	buttons:DockMargin(2, 2, 2, 2)
+	buttons:DockMargin(2, 6, 2, 2)
 	buttons:Dock(BOTTOM)
 
 	local def = buttons:Add("DButton")
@@ -732,12 +739,25 @@ end
 
 local function OpenConfigMenu()
 	local w = vgui.Create("DFrame")
-	w:SetSize(250, 400)
-	w:DockMargin(2, 26, 2, 2)
+	w:SetSize(250, 300)
+	w:DockPadding(2, 24, 2, 2)
 	w:SetTitle("#showhidden.title")
 	w:SetDeleteOnClose(true)
+    w:ShowCloseButton(false)
 	w:SetDraggable(true)
 	w:SetSizable(true)
+
+	function w:Paint(w, h)
+        draw.RoundedBox(4, 0, 0, w, h, Color(127, 127, 127, 200))
+    end
+
+    local closeBt = vgui.Create("DImageButton", w)
+    closeBt:SetPos(250 - 20, 4)
+    closeBt:SetSize(16, 16)
+    closeBt:SetImage("icon16/cross.png")
+    closeBt.DoClick = function()
+        w:Close()
+    end
 
 	local function addSwitch(triggerType, parent)
 		local default, col, text, enab = getColMatValues(triggerType)
@@ -807,10 +827,15 @@ local function OpenConfigMenu()
 		return pan
 	end
 
+	local function panelPaint(pan, w, h)
+		draw.RoundedBox(4, 0, 0, w, h, Color(240, 240, 240, 250))
+	end
+
 	local clipsPan = w:Add("DPanel")
 	clipsPan:DockPadding(2, 2, 2, 2)
 	clipsPan:DockMargin(2, 2, 2, 2)
 	clipsPan:Dock(TOP)
+	clipsPan.Paint = panelPaint
 
 	local brushes = {}
 	for brushType = 1, BrushType.MAX do
@@ -821,6 +846,7 @@ local function OpenConfigMenu()
 	trigPan:DockPadding(2, 2, 2, 2)
 	trigPan:DockMargin(2, 2, 2, 2)
 	trigPan:Dock(TOP)
+	trigPan.Paint = panelPaint
 
 	local enabTrig = trigPan:Add("DCheckBoxLabel")
 	enabTrig:SetText("#showtriggers.gui.enable")
@@ -841,13 +867,14 @@ local function OpenConfigMenu()
 	propsPan:DockMargin(2, 2, 2, 2)
 	propsPan:SetHeight(32)
 	propsPan:Dock(TOP)
+	propsPan.Paint = panelPaint
 
 	local enabProps = addSwitch(nil, propsPan)
 
 	local close = w:Add("DButton")
 	close:SetText("#close")
 	close:Dock(TOP)
-	close:DockMargin(2, 2, 2, 2)
+	close:DockMargin(2, 4, 2, 4)
 	close.DoClick = function() w:Close() end
 
 	function w.UpdateCountTooltips()
@@ -878,6 +905,7 @@ local function OpenConfigMenu()
 	trigPan:SizeToChildren(false, true)
 	w:InvalidateLayout(true)
 	w:SizeToChildren(false, true)
+	w:SetTall(w:GetTall() + 2)
 	w.UpdateCountTooltips()
 
 	w:Center()
