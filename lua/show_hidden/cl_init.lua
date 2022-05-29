@@ -745,7 +745,7 @@ local function OpenConfigMenu()
 	w:SetDeleteOnClose(true)
     w:ShowCloseButton(false)
 	w:SetDraggable(true)
-	w:SetSizable(true)
+	w:SetSizable(false)
 
 	function w:Paint(w, h)
         draw.RoundedBox(4, 0, 0, w, h, Color(127, 127, 127, 200))
