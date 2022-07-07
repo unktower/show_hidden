@@ -84,7 +84,7 @@ local function CheckTrigger(ent)
 	local class = ent:GetClass()
 	if not TRACK_TRIGGERS[class] then return end
 
-	if class == "trigger_teleport" or class == "trigger_teleport_relative" then
+	if string.StartWith(class, "trigger_teleport") then
 		local filter = ent:GetInternalVariable("m_iFilterName")
 		if filter == "" then
 			-- Normal reset teleport

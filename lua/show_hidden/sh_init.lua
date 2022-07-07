@@ -41,6 +41,9 @@ ShowHidden.TRACK_TRIGGERS = {
 	["trigger_teleport"] = true,
 	["trigger_push"] = true,
 	["trigger_multiple"] = true,
+	["trigger_multiple_rngfix"] = true,
+	["trigger_teleport_rngfix"] = true,
+	["trigger_teleport_relative_rngfix"] = true,
 }
 
 -- Calculate bitmask with all triggers enabled
